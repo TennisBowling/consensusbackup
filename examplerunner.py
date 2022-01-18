@@ -2,8 +2,6 @@ import consensusbackup
 from sanic import Sanic, response
 from sanic.request import Request
 
-router = consensusbackup.NodeRouter([])
-
 app = Sanic('router')
     
 @app.before_server_start
@@ -18,7 +16,10 @@ async def after_stop(app, loop):
     
 @app.route('/<path:path>', methods=['GET', 'POST'])
 async def route(request: Request, path: str):
-    data, status = await router.route(request.method, request.path, request.json)
+    try:
+        data, status = await router.route(request.method, request.raw_url.decode(), request.json)
+    except:
+        return response.json({'error': 'Server returned unexpected reply'}, status=503)
     return response.json(data, status=status)
 
 @router.listener('node_offline')
@@ -37,4 +38,4 @@ async def node_online(url: str):
 async def node_router_online():
     print('Node router online')
 
-app.run('0.0.0.0', port=8000, workers=4)
+app.run('0.0.0.0', port=8000, access_log=True)
