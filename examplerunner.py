@@ -4,6 +4,8 @@ from sanic.request import Request
 
 app = Sanic('router')
     
+router = consensusbackup.NodeRouter(['http://127.0.0.1:5052', 'https://1pe7yRM9cjd3PEyYQQf0TItnBR7:0fb942a04ba74cf7c0a9bc1b8c2df168@eth2-beacon-mainnet.infura.io', 'http://testing.mainnet.beacon-api.nimbus.team'])
+
 @app.before_server_start
 async def before_start(app, loop):
     await router.setup()
