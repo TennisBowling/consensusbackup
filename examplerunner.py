@@ -18,10 +18,7 @@ async def after_stop(app, loop):
     
 @app.route('/<path:path>', methods=['GET', 'POST'])
 async def route(request: Request, path: str):
-    try:
-        data, status = await router.route(request.method, request.raw_url.decode(), request.json)
-    except:
-        return response.json({'error': 'Server returned unexpected reply'}, status=503)
+    data, status = await router.route(request.method, request.raw_url.decode(), request.json)
     return response.json(data, status=status)
 
 @router.listener('node_offline')

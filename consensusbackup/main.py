@@ -1,7 +1,8 @@
 import aiohttp
 from typing import *
-from asyncio import sleep, shield
+from asyncio import sleep
 from . import logger
+
 
 
 class ServerOffline(Exception):
@@ -47,6 +48,9 @@ class NodeInstance:
     async def stop(self):
         await self.session.close()
 
+class OutOfAliveNodes:
+    pass
+
 class NodeRouter:
     def __init__(self, urls: List[str]):
         if not urls:
@@ -62,7 +66,7 @@ class NodeRouter:
     async def repeat_check(self) -> None:
         while True:
             await self.recheck()
-            await sleep(600)
+            await sleep(60)
 
     async def setup(self) -> None:
         self.nodes: List[NodeInstance] = [NodeInstance(url) for url in self.urls]
@@ -81,20 +85,21 @@ class NodeRouter:
         try:
             return await node.do_request(method, path, request)
         except ServerOffline:
-            return None
+            return ServerOffline()
         except AttributeError:
-            return None # you're out of nodes
+            return OutOfAliveNodes() # you're out of nodes
     
     async def route(self, method: str, path: str, request: Dict[str, Any]=None) -> Tuple[Dict[str, Any], int]:
-        data, status = await self.do_request(method, path, request)
-        counter = 0
-        while not data:
+        data = await self.do_request(method, path, request)
+
+        if isinstance(data, OutOfAliveNodes):
+            await self.recheck()
+            return ({'error': 'No available nodes'}, 503)
+
+        while isinstance(data, ServerOffline):
+            await self.recheck()
             data = await self.do_request(method, path, request)
-            counter += 1
-            if counter > len(self.nodes):
-                await self.dispatch('all_nodes_offline')
-                return ({'error': 'All nodes are offline'}, 503)
-        return (data, status)
+        return (data[0], data[1])
             
     async def stop(self) -> None:
         for node in self.nodes:
