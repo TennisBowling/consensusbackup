@@ -38,12 +38,14 @@ class NodeInstance:
             return False
     
     async def do_request(self, method: str, path: str, data: Dict[str, Any]=None) -> Tuple[Optional[Dict[str, Any]], int]:
-        try:
-            async with self.session.request(method, f'{self.url}{path}', json=data) as resp:
+        async with self.session.request(method, f'{self.url}{path}', json=data) as resp:
+            try:
                 return ((await resp.json()), resp.status)
-        except:
-            await self.set_offline()
-            return ServerOffline('Server is offline')
+            except (aiohttp.ServerTimeoutError, aiohttp.ServerConnectionError):
+                await self.set_offline()
+                return ServerOffline('Server is offline')
+            except:
+                return ({'error': 'Server returned unexpected value'}, 500)
 
     async def stop(self):
         await self.session.close()
@@ -93,7 +95,6 @@ class NodeRouter:
         data = await self.do_request(method, path, request)
 
         if isinstance(data, OutOfAliveNodes):
-            await self.recheck()
             return ({'error': 'No available nodes'}, 503)
 
         while isinstance(data, ServerOffline):
