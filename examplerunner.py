@@ -1,10 +1,11 @@
 import consensusbackup
 from sanic import Sanic, response
 from sanic.request import Request
+from platform import python_version, system, release, machine
 
 app = Sanic('router')
     
-router = consensusbackup.NodeRouter(['http://node1.com', 'http://node2.com'])
+router = consensusbackup.NodeRouter([''])
 
 @app.before_server_start
 async def before_start(app, loop):
@@ -19,7 +20,15 @@ async def after_stop(app, loop):
 @app.route('/<path:path>', methods=['GET', 'POST'])
 async def route(request: Request, path: str):
     data, status = await router.route(request.method, request.raw_url.decode(), request.json)
-    return response.json(data, status=status)
+    return response.text(data, status=status)
+
+@app.route('/eth/v1/events', methods=['GET'])
+async def eventsub(request: Request):
+
+
+@app.route('/version', methods=['GET']) # version of consensusbackup
+async def ver(request: Request):
+    return response.text(f'consensusbackup-{consensusbackup.__version__}/{system() + release()}-{machine()}/python{python_version()}')
 
 @router.listener('node_offline')
 async def node_offline(url: str):
