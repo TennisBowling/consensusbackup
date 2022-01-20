@@ -11,7 +11,7 @@ class ServerOffline(Exception):
 class NodeInstance:
     def __init__(self, url: str):
         self.url: str = url
-        self.session = aiohttp.ClientSession(headers={'Accept': 'application/json'})
+        self.session = aiohttp.ClientSession(headers={'Accept': 'application/json'}, json_serialize=dumps)
         self.status: bool = False
         self.dispatch = logger.dispatch
     
@@ -48,8 +48,9 @@ class NodeInstance:
                 return (dumps({'error': 'Server returned unexpected value'}), 500)
     
     async def do_stream_request(self, path: str, data: Dict[str, Any]=None):
-        async with self.session.get(f'{self.url}{path}') as resp:
-            async for 
+        async with self.session.get(f'{self.url}{path}', headers={'accept': 'text/event-stream'}) as resp:
+            async for x in resp.content:
+                
 
     async def stop(self):
         await self.session.close()
@@ -99,7 +100,7 @@ class NodeRouter:
         data = await self.do_request(method, path, request)
 
         if isinstance(data, OutOfAliveNodes):
-            return ({'error': 'No available nodes'}, 503)
+            return (dumps({'error': 'No available nodes'}), 503)
 
         while isinstance(data, ServerOffline):
             await self.recheck()
