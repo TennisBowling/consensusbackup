@@ -2,7 +2,7 @@ import aiohttp
 from typing import *
 from asyncio import sleep
 from . import logger
-
+from ujson import dumps
 
 
 class ServerOffline(Exception):
@@ -40,12 +40,16 @@ class NodeInstance:
     async def do_request(self, method: str, path: str, data: Dict[str, Any]=None) -> Tuple[Optional[Dict[str, Any]], int]:
         async with self.session.request(method, f'{self.url}{path}', json=data) as resp:
             try:
-                return ((await resp.json()), resp.status)
+                return ((await resp.text()), resp.status)
             except (aiohttp.ServerTimeoutError, aiohttp.ServerConnectionError):
                 await self.set_offline()
                 return ServerOffline('Server is offline')
             except:
-                return ({'error': 'Server returned unexpected value'}, 500)
+                return (dumps({'error': 'Server returned unexpected value'}), 500)
+    
+    async def do_stream_request(self, path: str, data: Dict[str, Any]=None):
+        async with self.session.get(f'{self.url}{path}') as resp:
+            async for 
 
     async def stop(self):
         await self.session.close()
