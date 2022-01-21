@@ -1,6 +1,7 @@
 # consensusbackup
 
-consensusbackup is a high-availability routing consensus node program.
+consensusbackup is a high-availability routing consensus node program.  
+consensusbackup supports the whole consensus standard API, with any client that supports the standard API can run as a node for consensusbackup.
 
 ## Installing
 Install latest stable:
@@ -14,6 +15,3 @@ Install latest develop:
 Example running in examplerunner.py  
 You'll need to add your nodes to the list in the runner.  
 Then run it like `python examplerunner.py`  
-
-## TODO
-event subscriptions

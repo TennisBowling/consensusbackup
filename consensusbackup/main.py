@@ -3,6 +3,7 @@ from typing import *
 from asyncio import sleep
 from . import logger
 from ujson import dumps
+from sanic.response import HTTPResponse
 
 
 class ServerOffline(Exception):
@@ -38,19 +39,24 @@ class NodeInstance:
             return False
     
     async def do_request(self, method: str, path: str, data: Dict[str, Any]=None) -> Tuple[Optional[Dict[str, Any]], int]:
-        async with self.session.request(method, f'{self.url}{path}', json=data) as resp:
-            try:
-                return ((await resp.text()), resp.status)
-            except (aiohttp.ServerTimeoutError, aiohttp.ServerConnectionError):
-                await self.set_offline()
-                return ServerOffline('Server is offline')
-            except:
-                return (dumps({'error': 'Server returned unexpected value'}), 500)
+        try:
+            async with self.session.request(method, f'{self.url}{path}', json=data) as resp:
+                try:
+                    return ((await resp.text()), resp.status)
+                except:
+                    return (dumps({'error': 'Server returned unexpected value'}), 500)
+        except (aiohttp.ServerTimeoutError, aiohttp.ServerConnectionError):
+            await self.set_offline()
+            return ServerOffline()
     
-    async def do_stream_request(self, path: str, data: Dict[str, Any]=None):
-        async with self.session.get(f'{self.url}{path}', headers={'accept': 'text/event-stream'}) as resp:
-            async for x in resp.content:
-                
+    async def do_stream_request(self, path: str, response: HTTPResponse, data: Dict[str, Any]=None):
+        try:
+            async with self.session.get(f'{self.url}{path}', headers={'accept': 'text/event-stream'}) as resp:
+                async for data in resp.content:
+                    await response.send(data)
+        except (aiohttp.ServerTimeoutError, aiohttp.ServerConnectionError):
+            await self.set_offline()
+            return ServerOffline()
 
     async def stop(self):
         await self.session.close()
@@ -67,8 +73,13 @@ class NodeRouter:
         self.listener = logger.listener
     
     async def recheck(self) -> None:
+        self.alive_count = 0
+        self.dead_count = 0
         for node in self.nodes:
-            await node.check_alive()
+            if await node.check_alive():
+                self.alive_count += 1
+            else:
+                self.dead_count += 1
     
     async def repeat_check(self) -> None:
         while True:
@@ -106,7 +117,16 @@ class NodeRouter:
             await self.recheck()
             data = await self.do_request(method, path, request)
         return (data[0], data[1])
-            
+    
+    async def stream(self, path: str, response: HTTPResponse, request: Dict[str, Any]=None) -> aiohttp.ClientResponse:
+        node = await self.get_alive_node()
+        try:
+            await node.do_stream_request(path, response, request)
+        except ServerOffline:
+            return ServerOffline()
+        except AttributeError:
+            return OutOfAliveNodes()
+
     async def stop(self) -> None:
         for node in self.nodes:
             await node.stop()
