@@ -1,6 +1,6 @@
 import aiohttp
 from typing import *
-from asyncio import sleep
+import asyncio
 from . import logger
 from ujson import dumps
 from sanic.response import HTTPResponse
@@ -73,18 +73,16 @@ class NodeRouter:
         self.listener = logger.listener
     
     async def recheck(self) -> None:
-        self.alive_count = 0
-        self.dead_count = 0
-        for node in self.nodes:
-            if await node.check_alive():
-                self.alive_count += 1
-            else:
-                self.dead_count += 1
+        tasks = [node.check_alive() for node in self.nodes]
+        results = await asyncio.gather(*tasks)
+        self.alive_count = results.count(True)  
+        self.dead_count = len(self.nodes) - self.alive_count
+        self.index = 0
     
     async def repeat_check(self) -> None:
         while True:
             await self.recheck()
-            await sleep(60)
+            await asyncio.sleep(60)
 
     async def setup(self) -> None:
         self.nodes: List[NodeInstance] = [NodeInstance(url) for url in self.urls]
@@ -92,11 +90,13 @@ class NodeRouter:
         await self.dispatch('node_router_online')
     
     async def get_alive_node(self) -> Optional[NodeInstance]:
-        for node in self.nodes:
-            if node.status:
-                if await node.check_alive():
-                    return node
-        return None
+        if self.alive_count == 0:
+            return None
+        if self.index >= self.alive_count:
+            self.index = 0
+        node = self.nodes[self.index]
+        self.index += 1
+        return node
     
     async def do_request(self, method: str, path: str, request: Dict[str, Any]=None) -> Tuple[Optional[Dict[str, Any]], int]:
         node = await self.get_alive_node()
@@ -128,5 +128,5 @@ class NodeRouter:
             return OutOfAliveNodes()
 
     async def stop(self) -> None:
-        for node in self.nodes:
-            await node.stop()
+        tasks = [node.stop() for node in self.nodes]
+        await asyncio.gather(*tasks)
